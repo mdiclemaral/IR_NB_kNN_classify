@@ -6,7 +6,7 @@ Works with: python3 classify.py folder_directory stop_words_directory
 """
 from bs4 import BeautifulSoup
 import sys
-import pickle
+
 import os
 import time
 from multiprocessing import Process, Manager
@@ -16,7 +16,10 @@ from numpy.linalg import norm
 import numpy as np
 from random import seed
 from random import randint
+
 start_time = time.time()
+
+
 
 """
 Reads an individual file and the stop_words file, tokenizes, cleans stop words and punctuations of the docs. 
@@ -36,9 +39,9 @@ def processor(dir, stops, input, result, topics, doc_list_for_inverted_idx):
     reuters = soup.find_all('reuters')
 
     #Finds the top 10 topics
-    c1, c2 = 0, 0
+
     for r in reuters:
-        train_status = r['lewissplit']
+
 
         if r['topics'] == 'YES' and (not r.body == None or not r.title == None):
             topic_text = str(r.topics)
@@ -47,7 +50,7 @@ def processor(dir, stops, input, result, topics, doc_list_for_inverted_idx):
             topic_text = topic_text.replace('</d>', '')
             all_t = topic_text.split('<d>')
             all_t = all_t[1:]
-            if len(all_t)== 0:
+            if len(all_t) == 0:
                 continue
             for m in all_t:
                 if m in topics:
@@ -436,9 +439,8 @@ def tf_idf_vectorizer(features, idf_vals_docs, w_dict, classification_topics):
                 tf_idf_vectors_test_names.append([id, topic])
                 tf_idf_vectors_test.append(vector_for_doc)
 
-
     '''
-        ids = []
+    ids = []
     for i in tf_idf_vectors_train_names:
         ids.append(i[0])
     print('test set boyut', len(ids))
@@ -459,7 +461,9 @@ def tf_idf_vectorizer(features, idf_vals_docs, w_dict, classification_topics):
     #print(tf_idf_vectors_test_names)
     print('trains with multi label', multi_train)
     print('counts of the labels', class_count)
+    plt.bar(class_count.keys(), class_count.values())
     '''
+
     return tf_idf_vectors_train, tf_idf_vectors_train_names, tf_idf_vectors_test, tf_idf_vectors_test_names
 
 
@@ -608,12 +612,10 @@ def fileHandler(dir, stops):
 
 
 
-
     ####### Naive Bayes Classification ######
 
     #Classification
     test_set, train_set, y_real = train_test_generate(w_dict, classification_topics)
-
 
 
     P_cj, P_wk_cj, num_all_words_for_normalization, class_num_words = train_naive_bayes(train_set)
@@ -663,8 +665,8 @@ def fileHandler(dir, stops):
 
 
 def main():
-    stops = 'stopwords.txt' #sys.argv[2]
-    dir = './reuters21578/' #sys.argv[1]
+    stops = sys.argv[2] #'stopwords.txt'
+    dir = sys.argv[1] #'./reuters21578/'
     fileHandler(dir, stops)
 
 if __name__ == '__main__':
