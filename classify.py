@@ -6,6 +6,7 @@ Works with: python3 classify.py folder_directory stop_words_directory
 """
 from bs4 import BeautifulSoup
 import sys
+import pickle
 import os
 import time
 from multiprocessing import Process, Manager
@@ -35,43 +36,40 @@ def processor(dir, stops, input, result, topics, doc_list_for_inverted_idx):
     reuters = soup.find_all('reuters')
 
     #Finds the top 10 topics
-
+    c1, c2 = 0, 0
     for r in reuters:
-        if r['topics'] == 'YES':
-            t= r.topics.text
-            if t == '':
+        train_status = r['lewissplit']
+
+        if r['topics'] == 'YES' and (not r.body == None or not r.title == None):
+            topic_text = str(r.topics)
+            topic_text = topic_text.replace('<topics>', '')
+            topic_text = topic_text.replace('</topics>', '')
+            topic_text = topic_text.replace('</d>', '')
+            all_t = topic_text.split('<d>')
+            all_t = all_t[1:]
+            if len(all_t)== 0:
                 continue
-            if '-' in t:
-                multi_topic = t.split('-')
-                for m in multi_topic:
-                    if m in topics:
-                        topics[m]+= 1
-                    else:
-                        topics[m]= 1
-            else:
-                if t in topics:
-                    topics[t] += 1
+            for m in all_t:
+                if m in topics:
+                    topics[m] += 1
                 else:
-                    topics[t] = 1
+                    topics[m] = 1
+
 
     #Reads reuters documents, tokenizes, cleans stop words and punctuations
 
     for r in reuters:
-        if r['topics'] == 'YES':
+        if r['topics'] == 'YES' and (not r.body == None or not r.title == None):
             train_status= r['lewissplit']
             id = int(r['newid'])
-            t = r.topics.text
-            if t == '':
+            topic_text= str(r.topics)
+            topic_text= topic_text.replace('<topics>','')
+            topic_text = topic_text.replace('</topics>', '')
+            topic_text= topic_text.replace('</d>','')
+            topic_for_result = topic_text.split('<d>')
+            topic_for_result = topic_for_result[1:]
+            if len(topic_for_result) == 0:
                 continue
-            if '-' in t:
-                multi_topic = t.split('-')
-                topic_for_result = []
-                for m in multi_topic:
-                    topic_for_result.append(m)
-            else:
-                topic_for_result = [t]
-
-
             text = r.text.lower()
 
             for t in text:
@@ -89,7 +87,6 @@ def processor(dir, stops, input, result, topics, doc_list_for_inverted_idx):
             result[id] = [topic_for_result, train_status, tokenized1]
             doc_list_for_inverted_idx[id]= tokenized1
 
-
 """
 Computes the document frequencies for the words in the created inverted index file, enters the 
 idf weights of the words into idf_index
@@ -97,6 +94,7 @@ idf weights of the words into idf_index
 Returns idf_index
 """
 def compute_idf(index, num_words_in_docs):
+
     total_docs = max(list(num_words_in_docs.keys()))
     idf_idx = {}
     for word in index:
@@ -143,11 +141,13 @@ Returns  train_set= {class1={doc1=[word1,word2..],doc2=[w1,w2..]},class2={..}},
          y_real= {doc1:[class1,class2..], doc2=[c1,c2]} 
 '''
 def train_test_generate(w_dict, classification_topics):
+
     test_set = {}
-    y_real={}
+    y_real = {}
     train_set = {}
      # result[id]= [topic class, train or test status, tokens of the doc]
     for id, value in w_dict.items():
+
         topics_interested = list(set(value[0]) & set(classification_topics))
         if value[1]=='TEST' and len(topics_interested) != 0:
             y_real[id] = topics_interested
@@ -369,7 +369,7 @@ def randomization_test(y_dict_1, y_dict_2, classification_topics):
             count += 1
 
     p_value = (count + 1) / (R + 1)
-    print('P value', p_value)
+    print('P value', round(p_value,4))
     return p_value
 
 
@@ -430,14 +430,36 @@ def tf_idf_vectorizer(features, idf_vals_docs, w_dict, classification_topics):
                     tf_idf = (1 + math.log(tf, 10)) * idf_vals_docs[feature]
                 vector_for_doc.append(tf_idf)
             if test_stat == 'TRAIN':
-                #tf_idf_vectors_train[id] = [topic, vector_for_doc]
                 tf_idf_vectors_train_names.append([id, topic])
                 tf_idf_vectors_train.append(vector_for_doc)
             elif test_stat == 'TEST':
                 tf_idf_vectors_test_names.append([id, topic])
                 tf_idf_vectors_test.append(vector_for_doc)
-                # tf_df_vectors_train = {id:[topic, [v1,v2...], id2...}
 
+
+    '''
+        ids = []
+    for i in tf_idf_vectors_train_names:
+        ids.append(i[0])
+    print('test set boyut', len(ids))
+    #print(ids)
+    norm_dump = open("ids.pkl", "wb")
+    pickle.dump(ids, norm_dump)
+
+    multi_train=0
+    class_count = {}
+    for c in classification_topics:
+        class_count[c]= 0
+    for t in tf_idf_vectors_train_names: #teste çevir test countları verir
+        if len(t[1]) >1:
+            multi_train+= 1
+        for i in t[1]:
+            class_count[i]+=1
+
+    #print(tf_idf_vectors_test_names)
+    print('trains with multi label', multi_train)
+    print('counts of the labels', class_count)
+    '''
     return tf_idf_vectors_train, tf_idf_vectors_train_names, tf_idf_vectors_test, tf_idf_vectors_test_names
 
 
@@ -460,11 +482,11 @@ Runs the knn algorithm by calling the find_knn_neighbor()
 """
 def knn_multi_process(k, tf_idf_vectors_test, tf_idf_vectors_test_names, tf_idf_vectors_train, tf_idf_vectors_train_names, classification_topics, y_dict):
     for i in range(len(tf_idf_vectors_test)):
-        test_vec= tf_idf_vectors_test[i]
-        id= tf_idf_vectors_test_names[i][0]
-        y_real= tf_idf_vectors_test_names[i][1]
+        test_vec = tf_idf_vectors_test[i]
+        id = tf_idf_vectors_test_names[i][0]
+        y_real = tf_idf_vectors_test_names[i][1]
         y_pred = find_knn_neighbor(k, tf_idf_vectors_train, tf_idf_vectors_train_names, test_vec, classification_topics)
-        y_dict[id]= [y_pred, y_real]
+        y_dict[id] = [y_pred, y_real]
 
 """
 KNN classification algorithm. Runs the knn classification algorithm on the test set.
@@ -536,7 +558,7 @@ def find_best_k(tf_idf_vectors_train, tf_idf_vectors_train_names, classification
     train = tf_idf_vectors_train[percent_5:percent_45]
     train_names = tf_idf_vectors_train_names[percent_5:percent_45]
 
-    for k in range(7,15):
+    for k in range(7,30):
         y_dict_knn = knn(k, train, train_names, dev, dev_names, classification_topics)
         vectorized_y_real_knn, vectorized_y_pred_knn = y_vectorizer(y_dict_knn, classification_topics)
         f1_macro, macro_precision, macro_recall, micro_precision, micro_recall = accuracy_meter(vectorized_y_real_knn, vectorized_y_pred_knn, classification_topics)
@@ -579,21 +601,29 @@ def fileHandler(dir, stops):
 
     # Finds the first ten most frequent topics which will be used for classification.
     sorted_topics = sorted(topics.items(), key=lambda a: a[1], reverse=True)
+
     classification_topics = []
     for k in range(10):
         classification_topics.append(sorted_topics[k][0])
+
+
 
 
     ####### Naive Bayes Classification ######
 
     #Classification
     test_set, train_set, y_real = train_test_generate(w_dict, classification_topics)
+
+
+
     P_cj, P_wk_cj, num_all_words_for_normalization, class_num_words = train_naive_bayes(train_set)
 
     y_pred_nb = predict_naive_bayes(P_cj, P_wk_cj, num_all_words_for_normalization, class_num_words, test_set)
     y_dict_nb = {}
+
     for id, y_val in y_real.items():
         y_dict_nb[id] = [y_pred_nb[id], y_real[id]]
+
     vectorized_y_real_nb, vectorized_y_pred_nb = y_vectorizer(y_dict_nb, classification_topics)
 
 
@@ -633,8 +663,8 @@ def fileHandler(dir, stops):
 
 
 def main():
-    stops = sys.argv[2] #'stopwords.txt'
-    dir = sys.argv[1] #'./reuters21578/'
+    stops = 'stopwords.txt' #sys.argv[2]
+    dir = './reuters21578/' #sys.argv[1]
     fileHandler(dir, stops)
 
 if __name__ == '__main__':
