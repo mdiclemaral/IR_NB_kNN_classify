@@ -1,5 +1,5 @@
 # Text Classification with Naive Bayes vs KNN
-Multinomial Naive Bayes (NB) and k Nearest Neighbor (kNN) algorithms for text classification for 
+Multinomial Naive Bayes (NB) and k Nearest Neighbor (kNN) implementation from scratch for text classification
 Text data in Reuters files. Python version 3.8 is used. 
 
 Runs with: 
